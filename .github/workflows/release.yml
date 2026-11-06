@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (must match lib/chemomer/version.rb)"
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Trusted publishing (OIDC): the publisher registered on RubyGems.org
+    # is repository chemomer/chemomer-ruby + workflow release.yml, with
+    # no environment — so this job must not claim one.
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Verify version matches input
+        run: |
+          actual=$(ruby -e 'require "./lib/chemomer/version"; print Chemomer::VERSION')
+          if [ "$actual" != "${{ inputs.version }}" ]; then
+            echo "Version mismatch: input=${{ inputs.version }}, lib/chemomer/version.rb=$actual"
+            exit 1
+          fi
+          echo "Releasing $actual"
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      # CI never pushes to git (read-only contents). `rake release`
+      # attempts `git push origin main` after publishing unless the
+      # version tag already exists locally — bundler then prints
+      # "Tag vX has already been created" and skips its git stage
+      # entirely. Pre-create the tag so the gem push is the only
+      # remote operation; tags on the remote remain the maintainer's.
+      - name: Pre-create the release tag (skips rake's git stage)
+        run: git tag "v${{ inputs.version }}"
+      # Builds and pushes using the GitHub OIDC identity — no API keys.
+      - uses: rubygems/release-gem@v1
+      - name: Summary
+        run: |
+          echo "Released chemomer ${{ inputs.version }} to RubyGems"
+          echo "https://rubygems.org/gems/chemomer"

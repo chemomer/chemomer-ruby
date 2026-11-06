@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  rspec:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        ruby: ["3.3", "3.4"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      # The gem drives the engine through its C ABI — no engine code is
+      # vendored, so CI builds the cdylib from the engine's main (the
+      # shared contract) and points the suite at it. Specs that need
+      # the dylib gate on CHEMOMER_LIB; the rest run everywhere.
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build the chemomer cdylib
+        run: |
+          git clone --depth 1 https://github.com/chemomer/chemomer engine
+          cargo build --release --manifest-path engine/Cargo.toml
+      - name: Point CHEMOMER_LIB at the built dylib
+        run: |
+          lib=$(ls engine/target/release/libchemomer.dylib engine/target/release/libchemomer.so 2>/dev/null | head -1)
+          echo "CHEMOMER_LIB=$PWD/$lib" >> "$GITHUB_ENV"
+      - run: bundle exec rspec
