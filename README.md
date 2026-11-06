@@ -67,6 +67,18 @@ Specs that need the cdylib gate on `CHEMOMER_LIB` and skip cleanly
 without it; the rest run everywhere. CI builds the engine's main
 cdylib and runs the full suite on ubuntu + macos.
 
+## Publishing
+
+`release.yml` is dispatch-only: a version input (verified against
+`lib/chemomer/version.rb`), the pre-created-tag trick, then
+`rubygems/release-gem@v1` — trusted publishing (OIDC), no stored
+credentials, no environment.
+
+The first publish of the gem name needs the RubyGems trusted publisher
+registered first — gem `chemomer`, owner `chemomer`, repository
+`chemomer/chemomer-ruby`, workflow `release.yml`, no environment — or
+a local `gem push` for the very first version.
+
 ## License
 
 MIT, same as the engine.
