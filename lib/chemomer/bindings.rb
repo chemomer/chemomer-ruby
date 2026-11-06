@@ -68,6 +68,16 @@ module Chemomer
 
         ffi_lib(*names)
         attach_function :chemomer_aux_from_molfile, %i[string], :pointer
+        # The call path needs the companions too — they exist in every
+        # engine ABI version, so attaching them here is version-safe;
+        # only the aux symbol above is the version-sensitive one.
+        attach_function :chemomer_string_free, %i[pointer], :void
+        attach_function :chemomer_last_error, [], :pointer
+
+        def self.last_error
+          pointer = chemomer_last_error
+          pointer.null? ? nil : pointer.read_string
+        end
       end
     rescue FFI::NotFoundError
       raise Error,
