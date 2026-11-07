@@ -15,7 +15,9 @@ RSpec.describe Chemomer do
   ].join("\n").freeze
 
   it "ships the {engine semver}.{runtime version}" do
-    expect(described_class::VERSION).to eq("0.1.0.1")
+    # The engine is 0.1.0; the 4th segment counts this gem's
+    # runtime-only revisions (bumped with the gem's own changes).
+    expect(described_class::VERSION).to match(/\A0\.1\.0\.\d+\z/)
   end
 
   it "exposes the binding surface" do
