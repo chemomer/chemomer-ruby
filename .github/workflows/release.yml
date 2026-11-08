@@ -21,7 +21,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: main
-          persist-credentials: false
+          # Credentials are needed by rake release's git stage (the
+          # tag push); they live only for this job's lifetime.
+          persist-credentials: true
       - name: Verify version matches input
         run: |
           actual=$(ruby -e 'require "./lib/chemomer/version"; print Chemomer::VERSION')
