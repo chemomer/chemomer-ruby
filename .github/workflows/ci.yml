@@ -5,6 +5,13 @@ on:
   push:
     branches: [main]
 
+env:
+  # Hermetic CI: the engine ref and the oracle corpus ref are pinned,
+  # never floating. Bump these lines deliberately with each engine
+  # ride (the tag carries what changed).
+  ENGINE_REF: v1.0.0
+  CORPUS_REF: v0.3.41
+
 jobs:
   rspec:
     strategy:
@@ -20,16 +27,25 @@ jobs:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
       # The gem drives the engine through its C ABI — no engine code is
-      # vendored, so CI builds the cdylib from the engine's main (the
-      # shared contract) and points the suite at it. Specs that need
-      # the dylib gate on CHEMOMER_LIB; the rest run everywhere.
+      # vendored, so CI builds the cdylib from the engine at the pinned
+      # tag (the shared contract) and points the suite at it. Specs
+      # that need the dylib gate on CHEMOMER_LIB; the rest run
+      # everywhere.
       - uses: dtolnay/rust-toolchain@stable
-      - name: Build the chemomer cdylib
+      - name: Build the chemomer cdylib at $ENGINE_REF
         run: |
-          git clone --depth 1 https://github.com/chemomer/chemomer engine
+          git clone --depth 1 --branch "$ENGINE_REF" https://github.com/chemomer/chemomer engine
           cargo build --release --manifest-path engine/Cargo.toml
       - name: Point CHEMOMER_LIB at the built dylib
         run: |
           lib=$(ls engine/target/release/libchemomer.dylib engine/target/release/libchemomer.so 2>/dev/null | head -1)
           echo "CHEMOMER_LIB=$PWD/$lib" >> "$GITHUB_ENV"
+      - name: Clone the inchi-tests oracle corpus at $CORPUS_REF
+        uses: actions/checkout@v7
+        with:
+          repository: chemomer/inchi-tests
+          ref: ${{ env.CORPUS_REF }}
+          path: .inchi-tests
+      - name: Point INCHI_TESTS at the corpus
+        run: echo "INCHI_TESTS=$PWD/.inchi-tests" >> "$GITHUB_ENV"
       - run: bundle exec rspec
