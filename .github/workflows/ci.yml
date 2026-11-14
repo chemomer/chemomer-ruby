@@ -9,7 +9,7 @@ env:
   # Hermetic CI: the engine ref and the oracle corpus ref are pinned,
   # never floating. Bump these lines deliberately with each engine
   # ride (the tag carries what changed).
-  ENGINE_REF: v1.0.0
+  ENGINE_REF: v1.0.1
   CORPUS_REF: v0.3.41
 
 jobs:
