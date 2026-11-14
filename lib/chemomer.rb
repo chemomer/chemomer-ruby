@@ -13,11 +13,15 @@ require "rbconfig"
 #
 #   Chemomer.from_molfile(molfile)      # => [inchi, inchikey]
 #   Chemomer.aux_from_molfile(molfile)  # => aux line
+#   Chemomer.rinchi_from_rxn(rxnfile)   # => [rinchi, rauxinfo, short, long, web]
+#   Chemomer.rinchi_from_rd(rdfile)     # => rinchi line
+#   Chemomer.rinchi_decode(rinchi, rauxinfo)  # => decoded reaction hash
 #   Chemomer.ffi_version                # => 1
 module Chemomer
   autoload :VERSION, "chemomer/version"
   autoload :Bindings, "chemomer/bindings"
   autoload :Error, "chemomer/error"
+  autoload :Rinchi, "chemomer/rinchi"
 
   # Fallback sonames tried in order when CHEMOMER_LIB is unset; the
   # OS loader resolves them from its search path (LD_LIBRARY_PATH /
@@ -43,8 +47,8 @@ module Chemomer
   #   # => ["InChI=1S/H2O/h1H2", "XLYOFNOQVPJJNP-UHFFFAOYSA-N"]
   def from_molfile(molfile)
     bindings = Bindings.for(*lib)
-    inchi = call(bindings, molfile, :chemomer_from_molfile)
-    inchikey = call(bindings, molfile, :chemomer_inchikey)
+    inchi = call(bindings, :chemomer_from_molfile, molfile)
+    inchikey = call(bindings, :chemomer_inchikey, molfile)
     [inchi, inchikey]
   end
 
@@ -54,7 +58,47 @@ module Chemomer
   # ships it.
   def aux_from_molfile(molfile)
     bindings = Bindings.aux(*lib)
-    call(bindings, molfile, :chemomer_aux_from_molfile)
+    call(bindings, :chemomer_aux_from_molfile, molfile)
+  end
+
+  # RXNfile → the reaction-identity five lines: [RInChI, RAuxInfo,
+  # Short-RInChIKey, Long-RInChIKey, Web-RInChIKey] (engine-verbatim,
+  # key headers included). Needs the chemomer_rinchi_* exports —
+  # attached on first use, so they light up the moment an engine
+  # cdylib ships them.
+  #
+  #   Chemomer.rinchi_from_rxn(rxnfile)
+  #   # => ["RInChI=1.00.1S/H2O/h1H2<>H2O/h1H2/d+",
+  #   #     "RAuxInfo=1.00.1/...",
+  #   #     "Short-RInChIKey=SA-FUHFF-...",
+  #   #     "Long-RInChIKey=SA-FUHFF-...",
+  #   #     "Web-RInChIKey=XLYOFNOQVPJJNPIXP-NUHFFFADPSCTJSA"]
+  def rinchi_from_rxn(rxnfile)
+    bindings = Bindings.rinchi(*lib)
+    [
+      call(bindings, :chemomer_rinchi_from_rxn, rxnfile),
+      call(bindings, :chemomer_rinchi_aux_from_rxn, rxnfile),
+      call(bindings, :chemomer_rinchi_short_key_from_rxn, rxnfile),
+      call(bindings, :chemomer_rinchi_long_key_from_rxn, rxnfile),
+      call(bindings, :chemomer_rinchi_web_key_from_rxn, rxnfile)
+    ]
+  end
+
+  # RDfile → the RInChI identifier line (the `$DATUM $MFMT` agent-scan
+  # input edge; the other four lines ride the RXN exports' assembly).
+  def rinchi_from_rd(rdfile)
+    bindings = Bindings.rinchi(*lib)
+    call(bindings, :chemomer_rinchi_from_rd, rdfile)
+  end
+
+  # RInChI (+ RAuxInfo companion, empty when unknown) → the decoded
+  # reaction: { "directionality" => "directional"|"equilibrium",
+  # "reactants"|"products"|"agents" => [{"inchi" =>, "aux" =>,
+  # "inchikey" =>}, ...] }. No structures are rebuilt — the components
+  # carry their identities straight from the string.
+  def rinchi_decode(rinchi, rauxinfo = "")
+    bindings = Bindings.rinchi(*lib)
+    Rinchi.decode_table(call(bindings, :chemomer_rinchi_decode, rinchi, rauxinfo))
   end
 
   # The C ABI version of the attached cdylib (1 today).
@@ -65,8 +109,8 @@ module Chemomer
   # The C ABI contract: null return on error (the message sits on the
   # calling thread's last_error slot), the returned string freed right
   # after reading it.
-  def call(bindings, molfile, function)
-    pointer = bindings.public_send(function, molfile)
+  def call(bindings, function, *arguments)
+    pointer = bindings.public_send(function, *arguments)
     # A null return arrives as a non-nil FFI::Pointer whose address is
     # 0 — the truthiness test would sail past it, so null? is the
     # guard.
