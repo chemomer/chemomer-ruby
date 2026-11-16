@@ -144,6 +144,41 @@ module Chemomer
       raise Error, load_failure(e)
     end
 
+    # The ABI-v2 surface (chemomer 1.1.3+): the single-crossing RInChI
+    # record with the force-equilibrium option bit, and the SMILES
+    # reader. Attached on first use — a v1 cdylib keeps the v1 path.
+    def record(*names)
+      record_bindings[names] ||= attach_record(names)
+    end
+
+    def record_bindings
+      @record_bindings ||= {}
+    end
+
+    def attach_record(names)
+      guard_readable(names)
+      Module.new do
+        extend FFI::Library
+
+        ffi_lib(*names)
+        attach_function :chemomer_rinchi_record_from_rxn2, %i[string uint32], :pointer
+        attach_function :chemomer_from_smiles, %i[string], :pointer
+        attach_function :chemomer_string_free, %i[pointer], :void
+        attach_function :chemomer_last_error, [], :pointer
+
+        def self.last_error
+          pointer = chemomer_last_error
+          pointer.null? ? nil : pointer.read_string
+        end
+      end
+    rescue FFI::NotFoundError
+      raise Error,
+            "chemomer: the cdylib does not export the ABI-v2 symbols — " \
+            "the record/smiles surface needs chemomer 1.1.3+ (github.com/chemomer/chemomer)"
+    rescue LoadError => e
+      raise Error, load_failure(e)
+    end
+
     # An explicit CHEMOMER_LIB path is one candidate; a missing or
     # unreadable file deserves the direct message rather than the
     # loader's. The default soname list is searched by the loader

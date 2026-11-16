@@ -101,7 +101,32 @@ module Chemomer
     Rinchi.decode_table(call(bindings, :chemomer_rinchi_decode, rinchi, rauxinfo))
   end
 
-  # The C ABI version of the attached cdylib (1 today).
+  # RXNfile → the identity record in one crossing, with the
+  # equilibrium option: { "rinchi" =>, "rauxinfo" =>, "rinchikey" =>,
+  # "longKey" =>, "webKey" => } — the five lines the v1 export needed
+  # five calls for. `force_equilibrium: true` derives the `/d` form
+  # and the equilibrium key shapes exactly as the oracle corpus's
+  # `forceEquilibrium` cases record. Needs an ABI-v2 cdylib
+  # (chemomer 1.1.3+).
+  def rinchi_record_from_rxn(rxnfile, force_equilibrium: false)
+    bindings = Bindings.record(*lib)
+    options = force_equilibrium ? 0x1 : 0x0
+    table = call(bindings, :chemomer_rinchi_record_from_rxn2, rxnfile, options)
+    keys = %w[rinchi rauxinfo rinchikey longKey webKey]
+    keys.zip(table.split("\n")).to_h
+  end
+
+  # SMILES → the derived identifier (the day-1 `smiles.parg` contract:
+  # chains, branches, ring closures, organic + bracket atoms, charges,
+  # isotopes, explicit H counts, aromatic markers). Needs an ABI-v2
+  # cdylib (chemomer 1.1.3+).
+  def from_smiles(smiles)
+    bindings = Bindings.record(*lib)
+    call(bindings, :chemomer_from_smiles, smiles)
+  end
+
+  # The C ABI version of the attached cdylib (2 today; v1 exports
+  # unchanged).
   def ffi_version
     Bindings.for(*lib).chemomer_ffi_version
   end

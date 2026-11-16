@@ -16,8 +16,8 @@ RSpec.describe Chemomer do
 
   it "ships the {engine semver}.{runtime version}" do
     # The engine is 1.0.0; the 4th segment counts this gem's
-    # runtime-only revisions (reset at the engine's 1.0.0 major; rides the 1.1.2 engine).
-    expect(described_class::VERSION).to match(/\A1\.1\.2\.\d+\z/)
+    # runtime-only revisions (reset at the engine's 1.0.0 major; rides the 1.1.4 engine).
+    expect(described_class::VERSION).to match(/\A1\.1\.4\.\d+\z/)
   end
 
   it "exposes the binding surface" do
@@ -53,7 +53,7 @@ RSpec.describe Chemomer do
     end
 
     it "reports the C ABI version" do
-      expect(described_class.ffi_version).to eq(1)
+      expect(described_class.ffi_version).to eq(2)
     end
 
     it "raises the engine's last_error on a malformed molfile" do
@@ -144,6 +144,42 @@ RSpec.describe Chemomer do
         with_rinchi_exports do
           expect { described_class.rinchi_from_rxn("not an rxnfile") }
             .to raise_error(Chemomer::Error, /\$RXN/)
+        end
+      end
+    end
+
+    # The ABI-v2 surface: the single-crossing record with the
+    # force-equilibrium option, and the SMILES reader.
+    describe "the record/smiles surface" do
+      def with_record_exports
+        described_class.ffi_version
+        yield
+      rescue Chemomer::Error => e
+        raise e unless e.message.include?("does not export")
+
+        skip "the cdylib does not export the ABI-v2 symbols yet"
+      end
+
+      it "carries the record and the equilibrium option" do
+        with_record_exports do
+          record = described_class.rinchi_record_from_rxn(WATER_RXN)
+          expect(record["rinchi"]).to eq("RInChI=1.00.1S/H2O/h1H2<>H2O/h1H2/d+")
+          equil = described_class.rinchi_record_from_rxn(WATER_RXN, force_equilibrium: true)
+          expect(equil["rinchi"]).to eq("RInChI=1.00.1S/H2O/h1H2<>H2O/h1H2/d=")
+          expect(equil["rinchikey"])
+            .to eq("Short-RInChIKey=SA-EUHFF-XLYOFNOQVP-XLYOFNOQVP-UHFFFADPSC-NUHFF-NUHFF-NUHFF-ZZZ")
+          expect(equil["longKey"])
+            .to eq("Long-RInChIKey=SA-EUHFF-XLYOFNOQVPJJNP-UHFFFAOYSA-N--XLYOFNOQVPJJNP-UHFFFAOYSA-N")
+          expect(equil["webKey"]).to eq("Web-RInChIKey=XLYOFNOQVPJJNPIXP-NUHFFFADPSCTJSA")
+        end
+      end
+
+      it "derives the identity from a SMILES string" do
+        with_record_exports do
+          expect(described_class.from_smiles("O"))
+            .to eq("InChI=1S/H2O/h1H2")
+          expect(described_class.from_smiles("c1ccccc1"))
+            .to eq("InChI=1S/C6H6/c1-2-4-6-5-3-1/h1-6H")
         end
       end
     end
